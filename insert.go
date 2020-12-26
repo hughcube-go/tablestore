@@ -2,7 +2,7 @@ package tablestore
 
 import (
 	aliTableStore "github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
-	"tablestore/schema"
+	"github.com/hughcube-go/tablestore/schema"
 )
 
 type InstallResponse struct {

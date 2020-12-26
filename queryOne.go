@@ -3,8 +3,8 @@ package tablestore
 import (
 	"errors"
 	aliTableStore "github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
+	"github.com/hughcube-go/tablestore/schema"
 	"reflect"
-	"tablestore/schema"
 )
 
 type QueryOneResponse struct {
