@@ -1,8 +1,11 @@
 package schema
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
+	aliTableStore "github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
+	"github.com/hughcube-go/timestamps"
 	"go/ast"
 	"reflect"
 	"sync"
@@ -83,4 +86,58 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 
 func (s *Schema) ParseField(fieldStruct reflect.StructField) *Field {
 	return ParseField(fieldStruct)
+}
+
+func (s *Schema) GetAutoIncrField() *Field {
+	for _, field := range s.Fields {
+		if field.IsPrimaryKey && field.IsAutoIncrement {
+			return field
+		}
+	}
+	return nil
+}
+
+func (s *Schema) SetDataRowChange(row Tabler, callback func(field *Field, value interface{})) {
+	rowValue := reflect.ValueOf(row)
+	for rowValue.Kind() == reflect.Slice || rowValue.Kind() == reflect.Array || rowValue.Kind() == reflect.Ptr {
+		rowValue = rowValue.Elem()
+	}
+
+	for index, field := range s.Fields {
+		value := rowValue.Field(index).Interface()
+		if val, ok := value.(sql.NullTime); ok {
+			callback(field, timestamps.FormatRFC3339Nano(val))
+		} else {
+			callback(field, value)
+		}
+	}
+}
+
+func (s *Schema) FillRequestPrimaryKey(row Tabler, primaryKeys *aliTableStore.PrimaryKey) bool {
+	s.SetDataRowChange(row, func(field *Field, value interface{}) {
+		if field.IsPrimaryKey {
+			primaryKeys.AddPrimaryKeyColumn(field.DBName, value)
+		}
+	})
+
+	return true
+}
+
+func (s *Schema) FillRequestPutRowChange(row Tabler, putRowChange *aliTableStore.PutRowChange) bool {
+	s.SetDataRowChange(row, func(field *Field, value interface{}) {
+		if field.IsPrimaryKey && !field.IsAutoIncrement {
+			putRowChange.PrimaryKey.AddPrimaryKeyColumn(field.DBName, value)
+		} else if field.IsPrimaryKey && field.IsAutoIncrement {
+			putRowChange.PrimaryKey.AddPrimaryKeyColumnWithAutoIncrement(field.DBName)
+		} else {
+			putRowChange.AddColumn(field.DBName, value)
+		}
+
+		if field.IsAutoIncrement {
+			putRowChange.SetCondition(aliTableStore.RowExistenceExpectation_IGNORE)
+			putRowChange.SetReturnPk()
+		}
+	})
+
+	return true
 }

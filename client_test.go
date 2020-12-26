@@ -2,10 +2,8 @@ package tablestore
 
 import (
 	"database/sql"
-	"github.com/hughcube-go/timestamps"
 	"github.com/stretchr/testify/assert"
 	"os"
-	"tablestore/schema"
 	"testing"
 	"time"
 )
@@ -60,33 +58,17 @@ func Test_Client_ParseSchema(t *testing.T) {
 	a.Equal(tableSchema, tableSchema1)
 }
 
-func Test_Client_TraverseSetDataRowChange(t *testing.T) {
-	a := assert.New(t)
-
-	client := client_test_client()
-
-	m, now := client_test_model()
-	err := client.TraverseSetDataRowChange(m, func(field *schema.Field, value interface{}) {
-		if "id" == field.DBName {
-			a.Equal(value, now.Time.UnixNano())
-		} else {
-			a.Equal(value, timestamps.FormatRFC3339Nano(now))
-		}
-	})
-	a.Nil(err)
-}
-
-func Test_Client_Install(t *testing.T) {
+func Test_Client_Insert(t *testing.T) {
 	a := assert.New(t)
 
 	client := client_test_client()
 	m, _ := client_test_model()
-	response := client.Install(m)
+	response := client.Insert(m)
 	a.Nil(response.Error)
 	a.True(response.LastId > 0)
 }
 
-func Test_Client_BatchInstall(t *testing.T) {
+func Test_Client_BatchInsert(t *testing.T) {
 	a := assert.New(t)
 
 	client := client_test_client()
@@ -96,7 +78,7 @@ func Test_Client_BatchInstall(t *testing.T) {
 		m, _ := client_test_model()
 		rows = append(rows, m)
 	}
-	response := client.BatchInstall(rows)
+	response := client.BatchInsert(rows)
 	a.Nil(response.Error)
 }
 
@@ -109,15 +91,17 @@ func Test_Client_QueryOne(t *testing.T) {
 	a.Nil(queryOneResponse.Error)
 	a.False(queryOneResponse.Exists)
 
-	installOneResponse := client.Install(row)
+	installOneResponse := client.Insert(row)
 	a.Nil(installOneResponse.Error)
 	a.True(installOneResponse.LastId > 0)
 	row.ID = installOneResponse.LastId
 
-	row = &TestModel{Pk: row.Pk, ID: row.ID}
-	queryOneResponse = client.QueryOne(row)
+	queryRow := &TestModel{Pk: row.Pk, ID: row.ID}
+	queryOneResponse = client.QueryOne(queryRow)
 	a.Nil(queryOneResponse.Error)
 	a.True(queryOneResponse.Exists)
+	a.Equal(queryRow.Pk, row.Pk)
+	a.Equal(queryRow.ID, row.ID)
 }
 
 func Test_Client_QueryAll(t *testing.T) {
@@ -126,13 +110,13 @@ func Test_Client_QueryAll(t *testing.T) {
 	client := client_test_client()
 
 	row1, _ := client_test_model()
-	installResponse := client.Install(row1)
+	installResponse := client.Insert(row1)
 	a.Nil(installResponse.Error)
 	a.True(installResponse.LastId > 0)
 	row1.ID = installResponse.LastId
 
 	row2, _ := client_test_model()
-	installResponse = client.Install(row2)
+	installResponse = client.Insert(row2)
 	a.Nil(installResponse.Error)
 	a.True(installResponse.LastId > 0)
 	row2.ID = installResponse.LastId
@@ -144,5 +128,24 @@ func Test_Client_QueryAll(t *testing.T) {
 	}
 
 	queryAllResponse := client.QueryAll(&rows)
+	println(queryAllResponse.Error)
 	a.Nil(queryAllResponse.Error)
+}
+
+func Test_Client_Delete(t *testing.T) {
+	a := assert.New(t)
+
+	client := client_test_client()
+
+	row, _ := client_test_model()
+	installResponse := client.Insert(row)
+	a.Nil(installResponse.Error)
+	a.True(installResponse.LastId > 0)
+	row.ID = installResponse.LastId
+
+	deleteResponse := client.DeleteOne(&TestModel{Pk: row.Pk, ID: row.ID})
+	a.Nil(deleteResponse.Error)
+
+	deleteResponse = client.DeleteOne(&TestModel{Pk: row.Pk, ID: row.ID})
+	a.Nil(deleteResponse.Error)
 }
