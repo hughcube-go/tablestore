@@ -1,4 +1,4 @@
-module tablestore
+module github.com/hughcube-go/tablestore
 
 go 1.23
 
