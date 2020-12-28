@@ -23,7 +23,7 @@ func (t *TableStore) DeleteOne(row schema.Tabler) DeleteResponse {
 	if err != nil {
 		return DeleteResponse{Error: err}
 	}
-	tableSchema.FillRequestPrimaryKey(row, request.DeleteRowChange.PrimaryKey)
+	tableSchema.SetRequestPrimaryKey(row, request.DeleteRowChange.PrimaryKey)
 
 	response, err := t.GetClient().DeleteRow(request)
 	if err != nil {

@@ -2,18 +2,28 @@ package tablestore
 
 import (
 	"database/sql"
+	"github.com/hughcube-go/timestamps"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
 )
 
+type AModel struct {
+	timestamps.Timestamps
+	CreatedAt sql.NullTime `tableStore:"autoCreateTime;column:created_at;statement;"`
+	UpdatedAt sql.NullTime `tableStore:"autoUpdateTime;column:updated_at;statement;"`
+	DeletedAt sql.NullTime `tableStore:"autoCreateTime;column:deleted_at;"`
+}
+
+type BModel struct {
+	AModel
+}
+
 type TestModel struct {
+	BModel
 	Pk        int64        `tableStore:"primaryKey;column:pk;"`
 	ID        int64        `tableStore:"primaryKey;column:id;autoIncrement;"`
-	CreatedAt sql.NullTime `tableStore:"autoCreateTime;column:created_at;"`
-	UpdatedAt sql.NullTime `tableStore:"autoUpdateTime;column:updated_at;"`
-	DeletedAt sql.NullTime `tableStore:"autoCreateTime;column:deleted_at;"`
 }
 
 func (m *TestModel) TableName() string {
@@ -25,10 +35,11 @@ func client_test_model() (*TestModel, sql.NullTime) {
 	m := &TestModel{
 		Pk:        now.Time.UnixNano(),
 		ID:        now.Time.UnixNano(),
-		CreatedAt: now,
-		UpdatedAt: now,
-		DeletedAt: now,
 	}
+
+	m.SetCreatedAt(now.Time)
+	m.SetUpdatedAt(now.Time)
+	m.SetDeletedAt(now.Time)
 
 	return m, now
 }

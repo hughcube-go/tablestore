@@ -12,12 +12,23 @@ type DataType string
 type TimeType int64
 
 type Field struct {
-	Name            string
-	DBName          string
+	Name        string
+	DBName      string
+	StructField reflect.StructField
+
 	IsPrimaryKey    bool
 	IsAutoIncrement bool
-	StructField     reflect.StructField
+	IsStatement     bool
+
+	TypeHierarchy  int
+	ValueHierarchy int
 }
+
+type FieldSlice []*Field
+
+func (p FieldSlice) Len() int           { return len(p) }
+func (p FieldSlice) Less(i, j int) bool { return p[i].ValueHierarchy < p[j].ValueHierarchy }
+func (p FieldSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 func ParseField(fieldStruct reflect.StructField) *Field {
 	field := &Field{
@@ -25,24 +36,28 @@ func ParseField(fieldStruct reflect.StructField) *Field {
 		StructField: fieldStruct,
 	}
 
-	tagSettings := ParseTagSetting(fieldStruct.Tag.Get("tableStore"), ";")
+	tags := ParseFieldTag(fieldStruct.Tag.Get("tableStore"), ";")
 
-	if dbName, ok := tagSettings["COLUMN"]; ok {
+	if dbName, ok := tags["COLUMN"]; ok {
 		field.DBName = dbName
 	}
 
-	if val, ok := tagSettings["PRIMARYKEY"]; ok && (mscheck.IsTrue(val) || "PRIMARYKEY" == val) {
+	if val, ok := tags["PRIMARYKEY"]; ok && (mscheck.IsTrue(val) || "PRIMARYKEY" == val) {
 		field.IsPrimaryKey = true
 	}
 
-	if val, ok := tagSettings["AUTOINCREMENT"]; ok && (mscheck.IsTrue(val) || "AUTOINCREMENT" == val) {
+	if val, ok := tags["AUTOINCREMENT"]; ok && (mscheck.IsTrue(val) || "AUTOINCREMENT" == val) {
 		field.IsAutoIncrement = true
+	}
+
+	if val, ok := tags["STATEMENT"]; ok && (mscheck.IsTrue(val) || "STATEMENT" == val) {
+		field.IsStatement = true
 	}
 
 	return field
 }
 
-func ParseTagSetting(str string, sep string) map[string]string {
+func ParseFieldTag(str string, sep string) map[string]string {
 	settings := map[string]string{}
 	names := strings.Split(str, sep)
 

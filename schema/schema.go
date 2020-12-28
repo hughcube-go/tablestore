@@ -8,6 +8,7 @@ import (
 	"github.com/hughcube-go/timestamps"
 	"go/ast"
 	"reflect"
+	"sort"
 	"sync"
 )
 
@@ -68,13 +69,45 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 
 	tableSchema := NewSchema(modelType)
 
-	for i := 0; i < modelType.NumField(); i++ {
-		if fieldType := modelType.Field(i); ast.IsExported(fieldType.Name) {
-			field := tableSchema.ParseField(fieldType)
-			tableSchema.Fields = append(tableSchema.Fields, field)
-			tableSchema.FieldDbNameMap[field.DBName] = field
-			tableSchema.FieldNameMap[field.Name] = field
+	// 按照字段名分组
+	fieldNameMap := map[string]FieldSlice{}
+	for _, field := range tableSchema.parse(modelType, 0) {
+		fieldNameMap[field.Name] = append(fieldNameMap[field.Name], field)
+	}
+
+	// 进行排序
+	for fieldName := range fieldNameMap {
+		sort.Sort(fieldNameMap[fieldName])
+	}
+
+	// 进行筛选
+	for _, fieldSlice := range fieldNameMap {
+		var trueField *Field
+		for _, field := range fieldSlice {
+			if "" == field.DBName && nil == trueField {
+				continue
+			}
+
+			if nil == trueField {
+				trueField = field
+			}
+
+			trueField.ValueHierarchy = field.ValueHierarchy
+			trueField.StructField = field.StructField
+
+			if !field.IsStatement {
+				break
+			}
 		}
+
+		if nil != trueField {
+			tableSchema.FieldNameMap[trueField.Name] = trueField
+		}
+	}
+
+	for _, field := range tableSchema.FieldNameMap {
+		tableSchema.Fields = append(tableSchema.Fields, field)
+		tableSchema.FieldDbNameMap[field.DBName] = field
 	}
 
 	if nil != cache {
@@ -82,6 +115,31 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 	}
 
 	return tableSchema, nil
+}
+
+func (s *Schema) parse(modelType reflect.Type, hierarchy int) []*Field {
+	fields := []*Field{}
+
+	for i := 0; i < modelType.NumField(); i++ {
+		fieldType := modelType.Field(i)
+		if !ast.IsExported(fieldType.Name) {
+			continue
+		}
+
+		if field := s.ParseField(fieldType); field != nil {
+			field.TypeHierarchy = hierarchy
+			field.ValueHierarchy = hierarchy
+			fields = append(fields, field)
+		}
+
+		if fieldType.Type.Kind() == reflect.Struct {
+			for _, field := range s.parse(fieldType.Type, hierarchy+1) {
+				fields = append(fields, field)
+			}
+		}
+	}
+
+	return fields
 }
 
 func (s *Schema) ParseField(fieldStruct reflect.StructField) *Field {
@@ -97,24 +155,45 @@ func (s *Schema) GetAutoIncrField() *Field {
 	return nil
 }
 
-func (s *Schema) SetDataRowChange(row Tabler, callback func(field *Field, value interface{})) {
+func (s *Schema) eachField(row interface{}, callback func(field *Field, value interface{}), hierarchy int) {
 	rowValue := reflect.ValueOf(row)
-	for rowValue.Kind() == reflect.Slice || rowValue.Kind() == reflect.Array || rowValue.Kind() == reflect.Ptr {
+	rowType := reflect.TypeOf(row)
+	for rowType.Kind() == reflect.Slice || rowType.Kind() == reflect.Array || rowType.Kind() == reflect.Ptr {
 		rowValue = rowValue.Elem()
+		rowType = rowType.Elem()
 	}
 
-	for index, field := range s.Fields {
-		value := rowValue.Field(index).Interface()
-		if val, ok := value.(sql.NullTime); ok {
-			callback(field, timestamps.FormatRFC3339Nano(val))
-		} else {
-			callback(field, value)
+	for i := 0; i < rowType.NumField(); i++ {
+		fieldValue := rowValue.Field(i)
+		fieldType := rowType.Field(i)
+
+		if(!fieldValue.CanInterface()){
+			continue
+		}
+
+		value := fieldValue.Interface()
+
+		if field, ok := s.FieldNameMap[fieldType.Name]; ok && field.ValueHierarchy == hierarchy && fieldValue.CanInterface() {
+			if val, ok := value.(sql.NullTime); ok {
+				callback(field, timestamps.FormatRFC3339Nano(val))
+			} else {
+				callback(field, value)
+			}
+			continue
+		}
+
+		if fieldType.Type.Kind() == reflect.Struct {
+			s.eachField(value, callback, hierarchy+1)
 		}
 	}
 }
 
-func (s *Schema) FillRequestPrimaryKey(row Tabler, primaryKeys *aliTableStore.PrimaryKey) bool {
-	s.SetDataRowChange(row, func(field *Field, value interface{}) {
+func (s *Schema) EachField(row Tabler, callback func(field *Field, value interface{})) {
+	s.eachField(row, callback, 0)
+}
+
+func (s *Schema) SetRequestPrimaryKey(row Tabler, primaryKeys *aliTableStore.PrimaryKey) bool {
+	s.EachField(row, func(field *Field, value interface{}) {
 		if field.IsPrimaryKey {
 			primaryKeys.AddPrimaryKeyColumn(field.DBName, value)
 		}
@@ -123,8 +202,8 @@ func (s *Schema) FillRequestPrimaryKey(row Tabler, primaryKeys *aliTableStore.Pr
 	return true
 }
 
-func (s *Schema) FillRequestPutRowChange(row Tabler, putRowChange *aliTableStore.PutRowChange) bool {
-	s.SetDataRowChange(row, func(field *Field, value interface{}) {
+func (s *Schema) SetRequestPutRowChange(row Tabler, putRowChange *aliTableStore.PutRowChange) bool {
+	s.EachField(row, func(field *Field, value interface{}) {
 		if field.IsPrimaryKey && !field.IsAutoIncrement {
 			putRowChange.PrimaryKey.AddPrimaryKeyColumn(field.DBName, value)
 		} else if field.IsPrimaryKey && field.IsAutoIncrement {

@@ -29,7 +29,7 @@ func (t *TableStore) BuildQueryOneRequest(row schema.Tabler) (*aliTableStore.Get
 	request.SingleRowQueryCriteria.MaxVersion = 1
 	request.SingleRowQueryCriteria.TableName = row.TableName()
 	request.SingleRowQueryCriteria.PrimaryKey = new(aliTableStore.PrimaryKey)
-	tableSchema.FillRequestPrimaryKey(row, request.SingleRowQueryCriteria.PrimaryKey)
+	tableSchema.SetRequestPrimaryKey(row, request.SingleRowQueryCriteria.PrimaryKey)
 
 	return request, nil
 }

@@ -23,7 +23,7 @@ func (t *TableStore) BuildInsertRequest(row schema.Tabler) (*aliTableStore.PutRo
 	if err != nil {
 		return nil, err
 	}
-	tableSchema.FillRequestPutRowChange(row, request.PutRowChange)
+	tableSchema.SetRequestPutRowChange(row, request.PutRowChange)
 
 	return request, nil
 }

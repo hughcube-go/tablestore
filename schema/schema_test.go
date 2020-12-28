@@ -4,14 +4,28 @@ import (
 	"database/sql"
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
 )
 
+type AModel struct {
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
+	DeletedAt sql.NullTime
+}
+
+type BModel struct {
+	AModel
+	ID int64 `tableStore:"primaryKey;column:id;autoIncrement;"`
+	CreatedAt sql.NullTime `tableStore:"autoCreateTime;column:created_at;statement;"`
+	UpdatedAt sql.NullTime `tableStore:"autoUpdateTime;column:updated_at;statement;"`
+	DeletedAt sql.NullTime `tableStore:"autoCreateTime;column:deleted_at;statement;"`
+}
+
 type TestModel struct {
-	ID        int64        `tableStore:"primaryKey;column:id;autoIncrement;"`
-	CreatedAt sql.NullTime `tableStore:"autoCreateTime;column:created_at;"`
-	UpdatedAt sql.NullTime `tableStore:"autoUpdateTime;column:updated_at;"`
-	DeletedAt sql.NullTime `tableStore:"autoCreateTime;column:deleted_at;"`
+	BModel
+	ID int64 `tableStore:"primaryKey;column:id;autoIncrement;"`
+	CreatedAt sql.NullTime
+	UpdatedAt sql.NullTime
+	DeletedAt sql.NullTime `tableStore:"autoCreateTime;column:deleted_at;statement;"`
 }
 
 func (m *TestModel) TableName() string {
@@ -22,10 +36,7 @@ func TestSchemaParse(t *testing.T) {
 	a := assert.New(t)
 
 	model := &TestModel{
-		ID:        12345,
-		CreatedAt: sql.NullTime{Time: time.Now(), Valid: true},
-		UpdatedAt: sql.NullTime{Time: time.Now(), Valid: true},
-		DeletedAt: sql.NullTime{Time: time.Now(), Valid: true},
+		ID: 12345,
 	}
 
 	tableSchema, err := Parse(model, nil)

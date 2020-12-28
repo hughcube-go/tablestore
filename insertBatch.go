@@ -29,7 +29,7 @@ func (t *TableStore) BuildBatchInsertRequest(list interface{}, rowOptions ...fun
 		putRowChange.TableName = row.TableName()
 		putRowChange.PrimaryKey = new(aliTableStore.PrimaryKey)
 		putRowChange.SetCondition(aliTableStore.RowExistenceExpectation_EXPECT_NOT_EXIST)
-		tableSchema.FillRequestPutRowChange(row, putRowChange)
+		tableSchema.SetRequestPutRowChange(row, putRowChange)
 
 		for _, rowOption := range rowOptions {
 			rowOption(putRowChange)
