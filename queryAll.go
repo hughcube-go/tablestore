@@ -82,9 +82,7 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 				continue
 			}
 
-			if nil == tableRow.Columns ||
-				nil == tableRow.PrimaryKey.PrimaryKeys ||
-				0 >= len(tableRow.Columns) ||
+			if 0 >= len(tableRow.Columns) ||
 				0 >= len(tableRow.PrimaryKey.PrimaryKeys) {
 				continue
 			}
@@ -94,25 +92,11 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 				if row.TableName() != tableName {
 					continue
 				}
-
 				tableSchema, err := t.ParseSchema(row)
 				if err != nil {
 					return QueryAllResponse{Response: response, Error: err}
 				}
-
-				rowValueElem := reflect.ValueOf(row).Elem()
-				for _, column := range tableRow.Columns {
-					if field, ok := tableSchema.FieldDbNameMap[column.ColumnName]; ok {
-						field.SetValue(rowValueElem.FieldByName(field.Name), column.Value)
-					}
-				}
-
-				for _, column := range tableRow.PrimaryKey.PrimaryKeys {
-					if field, ok := tableSchema.FieldDbNameMap[column.ColumnName]; ok {
-						field.SetValue(rowValueElem.FieldByName(field.Name), column.Value)
-					}
-				}
-
+				tableSchema.FillRow(row, tableRow.PrimaryKey.PrimaryKeys, tableRow.Columns)
 				resultRows = append(resultRows, row)
 				hitRowIndex = rowIndex
 				break

@@ -6,9 +6,9 @@ import (
 )
 
 type BatchInstallResponse struct {
-	Error    error
-	Response *aliTableStore.BatchWriteRowResponse
-	LastId   int64
+	Error        error
+	Response     *aliTableStore.BatchWriteRowResponse
+	FailureCount int
 }
 
 func (t *TableStore) BuildBatchInsertRequest(list interface{}, rowOptions ...func(*aliTableStore.PutRowChange)) (*aliTableStore.BatchWriteRowRequest, error) {
@@ -56,5 +56,14 @@ func (t *TableStore) BatchInsert(list interface{}, options ...func(*aliTableStor
 		return BatchInstallResponse{Error: err, Response: response}
 	}
 
-	return BatchInstallResponse{Response: response}
+	failureCount := 0
+	for _, tableRowResponses := range response.TableToRowsResult {
+		for _, tableRowResponse := range tableRowResponses {
+			if !tableRowResponse.IsSucceed {
+				failureCount++
+			}
+		}
+	}
+
+	return BatchInstallResponse{Response: response, FailureCount: failureCount}
 }

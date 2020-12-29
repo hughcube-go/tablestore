@@ -11,9 +11,9 @@ import (
 
 type AModel struct {
 	timestamps.Timestamps
-	CreatedAt sql.NullTime `tableStore:"autoCreateTime;column:created_at;statement;"`
-	UpdatedAt sql.NullTime `tableStore:"autoUpdateTime;column:updated_at;statement;"`
-	DeletedAt sql.NullTime `tableStore:"autoCreateTime;column:deleted_at;"`
+	CreatedAt sql.NullTime `tableStore:"column:created_at;statement;"`
+	UpdatedAt sql.NullTime `tableStore:"column:updated_at;statement;"`
+	DeletedAt sql.NullTime `tableStore:"column:deleted_at;statement;"`
 }
 
 type BModel struct {
@@ -22,8 +22,8 @@ type BModel struct {
 
 type TestModel struct {
 	BModel
-	Pk        int64        `tableStore:"primaryKey;column:pk;"`
-	ID        int64        `tableStore:"primaryKey;column:id;autoIncrement;"`
+	Pk int64 `tableStore:"primaryKey;column:pk;"`
+	ID int64 `tableStore:"primaryKey;column:id;autoIncrement;"`
 }
 
 func (m *TestModel) TableName() string {
@@ -33,8 +33,8 @@ func (m *TestModel) TableName() string {
 func client_test_model() (*TestModel, sql.NullTime) {
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 	m := &TestModel{
-		Pk:        now.Time.UnixNano(),
-		ID:        now.Time.UnixNano(),
+		Pk: now.Time.UnixNano(),
+		ID: now.Time.UnixNano(),
 	}
 
 	m.SetCreatedAt(now.Time)
@@ -85,7 +85,7 @@ func Test_Client_BatchInsert(t *testing.T) {
 	client := client_test_client()
 
 	rows := []*TestModel{}
-	for i := 1; i <= 100; i++ {
+	for i := 1; i <= 5; i++ {
 		m, _ := client_test_model()
 		rows = append(rows, m)
 	}

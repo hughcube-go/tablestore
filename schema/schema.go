@@ -155,9 +155,10 @@ func (s *Schema) GetAutoIncrField() *Field {
 	return nil
 }
 
-func (s *Schema) eachField(row interface{}, callback func(field *Field, value interface{}), hierarchy int) {
+func (s *Schema) eachField(row interface{}, callback func(field *Field, value reflect.Value), hierarchy int) {
 	rowValue := reflect.ValueOf(row)
 	rowType := reflect.TypeOf(row)
+
 	for rowType.Kind() == reflect.Slice || rowType.Kind() == reflect.Array || rowType.Kind() == reflect.Ptr {
 		rowValue = rowValue.Elem()
 		rowType = rowType.Elem()
@@ -167,33 +168,37 @@ func (s *Schema) eachField(row interface{}, callback func(field *Field, value in
 		fieldValue := rowValue.Field(i)
 		fieldType := rowType.Field(i)
 
-		if(!fieldValue.CanInterface()){
+		if !fieldValue.CanInterface() {
 			continue
 		}
 
-		value := fieldValue.Interface()
-
-		if field, ok := s.FieldNameMap[fieldType.Name]; ok && field.ValueHierarchy == hierarchy && fieldValue.CanInterface() {
-			if val, ok := value.(sql.NullTime); ok {
-				callback(field, timestamps.FormatRFC3339Nano(val))
-			} else {
-				callback(field, value)
-			}
+		if field, ok := s.FieldNameMap[fieldType.Name]; ok && field.ValueHierarchy == hierarchy {
+			callback(field, fieldValue)
 			continue
 		}
 
 		if fieldType.Type.Kind() == reflect.Struct {
-			s.eachField(value, callback, hierarchy+1)
+			s.eachField(fieldValue.Addr().Interface(), callback, hierarchy+1)
 		}
 	}
 }
 
-func (s *Schema) EachField(row Tabler, callback func(field *Field, value interface{})) {
-	s.eachField(row, callback, 0)
+func (s *Schema) EachSetRequestColumn(row Tabler, callback func(field *Field, value interface{})) {
+	setRequestColumnCallback := func(field *Field, columnValue reflect.Value) {
+		value := columnValue.Interface()
+
+		if val, ok := value.(sql.NullTime); ok {
+			callback(field, timestamps.FormatRFC3339Nano(val))
+		} else {
+			callback(field, value)
+		}
+	}
+
+	s.eachField(row, setRequestColumnCallback, 0)
 }
 
 func (s *Schema) SetRequestPrimaryKey(row Tabler, primaryKeys *aliTableStore.PrimaryKey) bool {
-	s.EachField(row, func(field *Field, value interface{}) {
+	s.EachSetRequestColumn(row, func(field *Field, value interface{}) {
 		if field.IsPrimaryKey {
 			primaryKeys.AddPrimaryKeyColumn(field.DBName, value)
 		}
@@ -203,7 +208,7 @@ func (s *Schema) SetRequestPrimaryKey(row Tabler, primaryKeys *aliTableStore.Pri
 }
 
 func (s *Schema) SetRequestPutRowChange(row Tabler, putRowChange *aliTableStore.PutRowChange) bool {
-	s.EachField(row, func(field *Field, value interface{}) {
+	s.EachSetRequestColumn(row, func(field *Field, value interface{}) {
 		if field.IsPrimaryKey && !field.IsAutoIncrement {
 			putRowChange.PrimaryKey.AddPrimaryKeyColumn(field.DBName, value)
 		} else if field.IsPrimaryKey && field.IsAutoIncrement {
@@ -219,4 +224,24 @@ func (s *Schema) SetRequestPutRowChange(row Tabler, putRowChange *aliTableStore.
 	})
 
 	return true
+}
+
+func (s *Schema) FillRow(row Tabler, primaryKeys []*aliTableStore.PrimaryKeyColumn, columns []*aliTableStore.AttributeColumn) {
+
+	columnMap := map[string]interface{}{}
+	for _, primaryKey := range primaryKeys {
+		columnMap[primaryKey.ColumnName] = primaryKey.Value
+	}
+
+	for _, column := range columns {
+		columnMap[column.ColumnName] = column.Value
+	}
+
+	setRowFieldCallback := func(field *Field, fieldValue reflect.Value) {
+		if value, ok := columnMap[field.DBName]; ok && fieldValue.CanSet() {
+			field.SetValue(fieldValue, value)
+		}
+	}
+
+	s.eachField(row, setRowFieldCallback, 0)
 }

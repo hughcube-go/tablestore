@@ -54,17 +54,7 @@ func (t *TableStore) QueryOne(row schema.Tabler, options ...func(*aliTableStore.
 		return QueryOneResponse{Response: response, Error: err}
 	}
 
-	rowValueElem := reflect.ValueOf(row).Elem()
-	columnMap := response.GetColumnMap()
-	if columnMap != nil {
-		for _, columns := range response.GetColumnMap().Columns {
-			for _, column := range columns {
-				if field, ok := tableSchema.FieldDbNameMap[column.ColumnName]; ok {
-					field.SetValue(rowValueElem.FieldByName(field.Name), column.Value)
-				}
-			}
-		}
-	}
+	tableSchema.FillRow(row, response.PrimaryKey.PrimaryKeys, response.Columns)
 
 	return QueryOneResponse{
 		Response: response,
