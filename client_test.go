@@ -22,8 +22,9 @@ type BModel struct {
 
 type TestModel struct {
 	BModel
-	Pk int64 `tableStore:"primaryKey;column:pk;"`
-	ID int64 `tableStore:"primaryKey;column:id;autoIncrement;"`
+	Pk       int64 `tableStore:"primaryKey;column:pk;"`
+	ID       int64 `tableStore:"primaryKey;column:id;autoIncrement;"`
+	typeTest int8  `tableStore:"column:type_test;"`
 }
 
 func (m *TestModel) TableName() string {
@@ -33,8 +34,9 @@ func (m *TestModel) TableName() string {
 func client_test_model() (*TestModel, sql.NullTime) {
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 	m := &TestModel{
-		Pk: now.Time.UnixNano(),
-		ID: now.Time.UnixNano(),
+		Pk:       now.Time.UnixNano(),
+		ID:       now.Time.UnixNano(),
+		typeTest: 10,
 	}
 
 	m.SetCreatedAt(now.Time)

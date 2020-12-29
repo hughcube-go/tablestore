@@ -1,11 +1,9 @@
 package schema
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	aliTableStore "github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
-	"github.com/hughcube-go/timestamps"
 	"go/ast"
 	"reflect"
 	"sort"
@@ -185,15 +183,11 @@ func (s *Schema) eachField(row interface{}, callback func(field *Field, value re
 
 func (s *Schema) EachSetRequestColumn(row Tabler, callback func(field *Field, value interface{})) {
 	setRequestColumnCallback := func(field *Field, columnValue reflect.Value) {
-		value := columnValue.Interface()
+		value := columnValue.Interface();
+		otsValue := field.ToOtsColumnValue(value)
 
-		if val, ok := value.(sql.NullTime); ok {
-			callback(field, timestamps.FormatRFC3339Nano(val))
-		} else {
-			callback(field, value)
-		}
+		callback(field, otsValue)
 	}
-
 	s.eachField(row, setRequestColumnCallback, 0)
 }
 
@@ -239,7 +233,7 @@ func (s *Schema) FillRow(row Tabler, primaryKeys []*aliTableStore.PrimaryKeyColu
 
 	setRowFieldCallback := func(field *Field, fieldValue reflect.Value) {
 		if value, ok := columnMap[field.DBName]; ok && fieldValue.CanSet() {
-			field.SetValue(fieldValue, value)
+			fieldValue.Set(reflect.ValueOf(field.ToStructFieldValue(value)))
 		}
 	}
 
