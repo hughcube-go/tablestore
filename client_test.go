@@ -165,11 +165,22 @@ func Test_Client_Delete(t *testing.T) {
 }
 
 func Test_Client_QueryRange(t *testing.T) {
+	a := assert.New(t)
+
 	var rows []*TestModel
 
 	client := client_test_client()
 
-	response := client.QueryRange(rows, schema.MaxPrimaryKey{}, schema.MinPrimaryKey{}, 1)
+	row, _ := client_test_model()
+	_= client.Insert(row)
 
-	print(response.Error)
+	var response QueryRangeResponse
+
+	response = client.QueryRange(&rows, schema.MaxPrimaryKey{}, schema.MinPrimaryKey{}, 1)
+	a.Nil(response.Error)
+	a.True(len(rows) > 0)
+
+	response = client.QueryRange(&rows, schema.MinPrimaryKey{}, schema.MaxPrimaryKey{}, 1)
+	a.Nil(response.Error)
+	a.True(len(rows) > 0)
 }
