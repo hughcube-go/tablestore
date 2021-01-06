@@ -12,18 +12,13 @@ type InstallResponse struct {
 }
 
 func (t *TableStore) BuildInsertRequest(row schema.Tabler) (*aliTableStore.PutRowRequest, error) {
-	request := new(aliTableStore.PutRowRequest)
-	request.PutRowChange = new(aliTableStore.PutRowChange)
-	request.PutRowChange.TableName = row.TableName()
-	request.PutRowChange.PrimaryKey = new(aliTableStore.PrimaryKey)
-	request.PutRowChange.SetCondition(aliTableStore.RowExistenceExpectation_EXPECT_NOT_EXIST)
-
-	// 填充请求的 PutRowChange
 	tableSchema, err := t.ParseSchema(row)
 	if err != nil {
 		return nil, err
 	}
-	tableSchema.SetRequestPutRowChange(row, request.PutRowChange)
+
+	request := new(aliTableStore.PutRowRequest)
+	request.PutRowChange = tableSchema.BuildRequestPutRowChange(row)
 
 	return request, nil
 }

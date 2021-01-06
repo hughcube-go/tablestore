@@ -2,6 +2,7 @@ package tablestore
 
 import (
 	"database/sql"
+	"github.com/hughcube-go/tablestore/schema"
 	"github.com/hughcube-go/timestamps"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -22,9 +23,9 @@ type BModel struct {
 
 type TestModel struct {
 	BModel
-	Pk       int64 `tableStore:"primaryKey;column:pk;"`
-	ID       int64 `tableStore:"primaryKey;column:id;autoIncrement;"`
-	typeTest int8  `tableStore:"column:type_test;"`
+	Pk       int64         `tableStore:"primaryKey;column:pk;sort:1;"`
+	ID       int64         `tableStore:"primaryKey;column:id;autoIncrement;sort:2;"`
+	typeTest time.Duration `tableStore:"column:type_test;"`
 }
 
 func (m *TestModel) TableName() string {
@@ -161,4 +162,14 @@ func Test_Client_Delete(t *testing.T) {
 
 	deleteResponse = client.DeleteOne(&TestModel{Pk: row.Pk, ID: row.ID})
 	a.Nil(deleteResponse.Error)
+}
+
+func Test_Client_QueryRange(t *testing.T) {
+	var rows []*TestModel
+
+	client := client_test_client()
+
+	response := client.QueryRange(rows, schema.MaxPrimaryKey{}, schema.MinPrimaryKey{}, 1)
+
+	print(response.Error)
 }

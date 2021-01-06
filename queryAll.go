@@ -28,8 +28,7 @@ func (t *TableStore) BuildQueryAllRequest(row schema.Tabler) (*aliTableStore.Get
 	request.SingleRowQueryCriteria = new(aliTableStore.SingleRowQueryCriteria)
 	request.SingleRowQueryCriteria.MaxVersion = 1
 	request.SingleRowQueryCriteria.TableName = row.TableName()
-	request.SingleRowQueryCriteria.PrimaryKey = new(aliTableStore.PrimaryKey)
-	tableSchema.SetRequestPrimaryKey(row, request.SingleRowQueryCriteria.PrimaryKey)
+	request.SingleRowQueryCriteria.PrimaryKey = tableSchema.BuildRequestPrimaryKey(row)
 
 	return request, nil
 }
@@ -44,6 +43,11 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 	request := new(aliTableStore.BatchGetRowRequest)
 	criteria := map[string]*aliTableStore.MultiRowQueryCriteria{}
 	for _, row := range rows {
+		tableSchema, err := t.ParseSchema(row)
+		if err != nil {
+			return QueryAllResponse{Error: err}
+		}
+
 		tableName := row.TableName()
 		if criterion, ok := criteria[tableName]; !ok {
 			criterion = new(aliTableStore.MultiRowQueryCriteria)
@@ -51,15 +55,7 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 			criterion.MaxVersion = 1
 			criteria[tableName] = criterion
 		}
-
-		tableSchema, err := t.ParseSchema(row)
-		if err != nil {
-			return QueryAllResponse{Error: err}
-		}
-
-		primaryKey := new(aliTableStore.PrimaryKey)
-		tableSchema.SetRequestPrimaryKey(row, primaryKey)
-		criteria[tableName].AddRow(primaryKey)
+		criteria[tableName].AddRow(tableSchema.BuildRequestPrimaryKey(row))
 	}
 
 	for _, criterion := range criteria {
@@ -113,6 +109,7 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 			}
 		}
 	}
+
 	listType := reflect.TypeOf(list)
 	resultSlice := reflect.MakeSlice(listType.Elem(), len(resultRows), len(resultRows))
 	for index, row := range resultRows {

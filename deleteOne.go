@@ -12,18 +12,16 @@ type DeleteResponse struct {
 }
 
 func (t *TableStore) DeleteOne(row schema.Tabler) DeleteResponse {
-	request := new(aliTableStore.DeleteRowRequest)
-	request.DeleteRowChange = new(aliTableStore.DeleteRowChange)
-	request.DeleteRowChange.TableName = row.TableName()
-	request.DeleteRowChange.SetCondition(aliTableStore.RowExistenceExpectation_IGNORE)
-
-	request.DeleteRowChange.PrimaryKey = new(aliTableStore.PrimaryKey)
-
 	tableSchema, err := t.ParseSchema(row)
 	if err != nil {
 		return DeleteResponse{Error: err}
 	}
-	tableSchema.SetRequestPrimaryKey(row, request.DeleteRowChange.PrimaryKey)
+
+	request := new(aliTableStore.DeleteRowRequest)
+	request.DeleteRowChange = new(aliTableStore.DeleteRowChange)
+	request.DeleteRowChange.TableName = row.TableName()
+	request.DeleteRowChange.SetCondition(aliTableStore.RowExistenceExpectation_IGNORE)
+	request.DeleteRowChange.PrimaryKey = tableSchema.BuildRequestPrimaryKey(row)
 
 	response, err := t.GetClient().DeleteRow(request)
 	if err != nil {

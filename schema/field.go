@@ -4,15 +4,16 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/hughcube-go/timestamps"
-	"github.com/hughcube-go/utils/mscheck"
+	"github.com/hughcube-go/utils/msstruct"
+	"math"
 	"reflect"
-	"strings"
 )
 
 type DataType string
 type TimeType int64
 
 type Field struct {
+	Sort        int
 	Name        string
 	DBName      string
 	StructField reflect.StructField
@@ -25,68 +26,25 @@ type Field struct {
 	ValueHierarchy int
 }
 
-type FieldSlice []*Field
-
-func (p FieldSlice) Len() int           { return len(p) }
-func (p FieldSlice) Less(i, j int) bool { return p[i].ValueHierarchy < p[j].ValueHierarchy }
-func (p FieldSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-
 func ParseField(fieldStruct reflect.StructField) *Field {
 	field := &Field{
 		Name:        fieldStruct.Name,
 		StructField: fieldStruct,
+		Sort:        math.MaxInt32,
 	}
 
-	tags := ParseFieldTag(fieldStruct.Tag.Get("tableStore"), ";")
+	tag := msstruct.ParseTag(fieldStruct.Tag.Get("tableStore"))
 
-	if dbName, ok := tags["COLUMN"]; ok {
-		field.DBName = dbName
-	}
+	field.DBName = tag.Get("column")
+	field.IsPrimaryKey = tag.IsTrue("primaryKey")
+	field.IsAutoIncrement = tag.IsTrue("autoincrement")
+	field.IsStatement = tag.IsTrue("statement")
 
-	if val, ok := tags["PRIMARYKEY"]; ok && (mscheck.IsTrue(val) || "PRIMARYKEY" == val) {
-		field.IsPrimaryKey = true
-	}
-
-	if val, ok := tags["AUTOINCREMENT"]; ok && (mscheck.IsTrue(val) || "AUTOINCREMENT" == val) {
-		field.IsAutoIncrement = true
-	}
-
-	if val, ok := tags["STATEMENT"]; ok && (mscheck.IsTrue(val) || "STATEMENT" == val) {
-		field.IsStatement = true
+	if sort, err := tag.GetInt("SORT"); err == nil {
+		field.Sort = sort
 	}
 
 	return field
-}
-
-func ParseFieldTag(str string, sep string) map[string]string {
-	settings := map[string]string{}
-	names := strings.Split(str, sep)
-
-	for i := 0; i < len(names); i++ {
-		j := i
-		if len(names[j]) > 0 {
-			for {
-				if names[j][len(names[j])-1] == '\\' {
-					i++
-					names[j] = names[j][0:len(names[j])-1] + sep + names[i]
-					names[i] = ""
-				} else {
-					break
-				}
-			}
-		}
-
-		values := strings.Split(names[j], ":")
-		k := strings.TrimSpace(strings.ToUpper(values[0]))
-
-		if len(values) >= 2 {
-			settings[k] = strings.Join(values[1:], ":")
-		} else if k != "" {
-			settings[k] = k
-		}
-	}
-
-	return settings
 }
 
 func (f *Field) IsString() bool {

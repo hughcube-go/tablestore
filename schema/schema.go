@@ -13,10 +13,28 @@ import (
 // ErrUnsupportedDataType unsupported data type
 var ErrUnsupportedDataType = errors.New("unsupported data type")
 
+type RangePrimaryKey map[string]interface{}
+type MaxPrimaryKey map[string]interface{}
+type MinPrimaryKey map[string]interface{}
+
+//
+type FieldSlice []*Field
+
+func (p FieldSlice) Len() int           { return len(p) }
+func (p FieldSlice) Less(i, j int) bool { return p[i].Sort < p[j].Sort }
+func (p FieldSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+// 用来做按照优先级排序的
+type FieldHierarchySlice FieldSlice
+
+func (p FieldHierarchySlice) Len() int           { return len(p) }
+func (p FieldHierarchySlice) Less(i, j int) bool { return p[i].ValueHierarchy < p[j].ValueHierarchy }
+func (p FieldHierarchySlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
 type Schema struct {
 	Name           string
 	Type           reflect.Type
-	Fields         []*Field
+	Fields         FieldSlice
 	FieldDbNameMap map[string]*Field
 	FieldNameMap   map[string]*Field
 }
@@ -68,7 +86,7 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 	tableSchema := NewSchema(modelType)
 
 	// 按照字段名分组
-	fieldNameMap := map[string]FieldSlice{}
+	fieldNameMap := map[string]FieldHierarchySlice{}
 	for _, field := range tableSchema.parse(modelType, 0) {
 		fieldNameMap[field.Name] = append(fieldNameMap[field.Name], field)
 	}
@@ -107,6 +125,8 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 		tableSchema.Fields = append(tableSchema.Fields, field)
 		tableSchema.FieldDbNameMap[field.DBName] = field
 	}
+
+	sort.Sort(tableSchema.Fields)
 
 	if nil != cache {
 		cache.Store(modelType, tableSchema)
@@ -157,7 +177,7 @@ func (s *Schema) eachField(row interface{}, callback func(field *Field, value re
 	rowValue := reflect.ValueOf(row)
 	rowType := reflect.TypeOf(row)
 
-	for rowType.Kind() == reflect.Slice || rowType.Kind() == reflect.Array || rowType.Kind() == reflect.Ptr {
+	if rowType.Kind() == reflect.Ptr {
 		rowValue = rowValue.Elem()
 		rowType = rowType.Elem()
 	}
@@ -183,25 +203,27 @@ func (s *Schema) eachField(row interface{}, callback func(field *Field, value re
 
 func (s *Schema) EachSetRequestColumn(row Tabler, callback func(field *Field, value interface{})) {
 	setRequestColumnCallback := func(field *Field, columnValue reflect.Value) {
-		value := columnValue.Interface();
-		otsValue := field.ToOtsColumnValue(value)
-
-		callback(field, otsValue)
+		callback(field, field.ToOtsColumnValue(columnValue.Interface()))
 	}
 	s.eachField(row, setRequestColumnCallback, 0)
 }
 
-func (s *Schema) SetRequestPrimaryKey(row Tabler, primaryKeys *aliTableStore.PrimaryKey) bool {
+func (s *Schema) BuildRequestPrimaryKey(row Tabler) *aliTableStore.PrimaryKey {
+	primaryKeys := new(aliTableStore.PrimaryKey)
 	s.EachSetRequestColumn(row, func(field *Field, value interface{}) {
 		if field.IsPrimaryKey {
 			primaryKeys.AddPrimaryKeyColumn(field.DBName, value)
 		}
 	})
-
-	return true
+	return primaryKeys
 }
 
-func (s *Schema) SetRequestPutRowChange(row Tabler, putRowChange *aliTableStore.PutRowChange) bool {
+func (s *Schema) BuildRequestPutRowChange(row Tabler) *aliTableStore.PutRowChange {
+	putRowChange := new(aliTableStore.PutRowChange)
+	putRowChange.TableName = row.TableName()
+	putRowChange.PrimaryKey = new(aliTableStore.PrimaryKey)
+	putRowChange.SetCondition(aliTableStore.RowExistenceExpectation_EXPECT_NOT_EXIST)
+
 	s.EachSetRequestColumn(row, func(field *Field, value interface{}) {
 		if field.IsPrimaryKey && !field.IsAutoIncrement {
 			putRowChange.PrimaryKey.AddPrimaryKeyColumn(field.DBName, value)
@@ -217,10 +239,49 @@ func (s *Schema) SetRequestPutRowChange(row Tabler, putRowChange *aliTableStore.
 		}
 	})
 
-	return true
+	return putRowChange
 }
 
-func (s *Schema) FillRow(row Tabler, primaryKeys []*aliTableStore.PrimaryKeyColumn, columns []*aliTableStore.AttributeColumn) {
+func (s *Schema) BuildRequestRangePrimaryKey(condition interface{}) (*aliTableStore.PrimaryKey, bool, error) {
+
+	if primaryKey, ok := condition.(*aliTableStore.PrimaryKey); ok {
+		return primaryKey, false, nil
+	}
+
+	var conditionMap RangePrimaryKey
+	var isMin bool
+
+	if _, ok := condition.(MaxPrimaryKey); ok {
+		isMin = false
+		conditionMap = RangePrimaryKey(condition.(MaxPrimaryKey))
+	} else if _, ok := condition.(MinPrimaryKey); ok {
+		isMin = true
+		conditionMap = RangePrimaryKey(condition.(MinPrimaryKey))
+	} else {
+		return nil, false, errors.New("The type must be MaxPrimaryKey or MinPrimaryKey")
+	}
+
+	primaryKeys := new(aliTableStore.PrimaryKey)
+	for _, field := range s.Fields {
+		if !field.IsPrimaryKey {
+			continue
+		}
+
+		if value, ok := conditionMap[field.DBName]; ok && nil != value {
+			primaryKeys.AddPrimaryKeyColumn(field.DBName, field.ToOtsColumnValue(value))
+		} else if value, ok := conditionMap[field.Name]; ok && nil != value {
+			primaryKeys.AddPrimaryKeyColumn(field.DBName, field.ToOtsColumnValue(value))
+		} else if isMin {
+			primaryKeys.AddPrimaryKeyColumnWithMinValue(field.DBName)
+		} else {
+			primaryKeys.AddPrimaryKeyColumnWithMaxValue(field.DBName)
+		}
+	}
+
+	return primaryKeys, isMin, nil
+}
+
+func (s *Schema) FillRow(row interface{}, primaryKeys []*aliTableStore.PrimaryKeyColumn, columns []*aliTableStore.AttributeColumn) {
 
 	columnMap := map[string]interface{}{}
 	for _, primaryKey := range primaryKeys {
