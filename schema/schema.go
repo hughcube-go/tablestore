@@ -151,9 +151,7 @@ func (s *Schema) parse(modelType reflect.Type, hierarchy int) []*Field {
 		}
 
 		if fieldType.Type.Kind() == reflect.Struct {
-			for _, field := range s.parse(fieldType.Type, hierarchy+1) {
-				fields = append(fields, field)
-			}
+			fields = append(fields, s.parse(fieldType.Type, hierarchy+1)...)
 		}
 	}
 

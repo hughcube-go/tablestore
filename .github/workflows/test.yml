@@ -1,0 +1,32 @@
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  run:
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: [ubuntu-latest, windows-latest, macOS-latest]
+        go-versions: ['1.13', '1.14', '1.15']
+    name: Go ${{ matrix.go-versions }} Test on ${{ matrix.operating-system }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-versions }}
+
+      - name: Set ENV
+        with:
+          ALIYUN_OTS_END_POINT:
+          ALIYUN_OTS_INSTANCE_NAME:
+          ALIYUN_ACCESS_KEY:
+          ALIYUN_ACCESS_KEY_SECRET:
+
+#      - name: Run Test
+#        run: |
+#          go test -v -race ./...

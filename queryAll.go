@@ -4,6 +4,7 @@ import (
 	"errors"
 	aliTableStore "github.com/aliyun/aliyun-tablestore-go-sdk/tablestore"
 	"github.com/hughcube-go/tablestore/schema"
+	"github.com/hughcube-go/utils/msslice"
 	"reflect"
 )
 
@@ -49,8 +50,8 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 		}
 
 		tableName := row.TableName()
-		if criterion, ok := criteria[tableName]; !ok {
-			criterion = new(aliTableStore.MultiRowQueryCriteria)
+		if _, ok := criteria[tableName]; !ok {
+			criterion := new(aliTableStore.MultiRowQueryCriteria)
 			criterion.TableName = row.TableName()
 			criterion.MaxVersion = 1
 			criteria[tableName] = criterion
@@ -78,8 +79,7 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 				continue
 			}
 
-			if 0 >= len(tableRow.Columns) ||
-				0 >= len(tableRow.PrimaryKey.PrimaryKeys) {
+			if 0 >= len(tableRow.Columns) || 0 >= len(tableRow.PrimaryKey.PrimaryKeys) {
 				continue
 			}
 
@@ -110,8 +110,12 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 		}
 	}
 
-	listType := reflect.TypeOf(list)
-	resultSlice := reflect.MakeSlice(listType.Elem(), len(resultRows), len(resultRows))
+	resultSlice, err := msslice.MakeSameTypeValue(list, len(resultRows), len(resultRows))
+	if err != nil {
+		return QueryAllResponse{Error: err}
+	}
+
+
 	for index, row := range resultRows {
 		resultSlice.Index(index).Set(reflect.ValueOf(row))
 	}

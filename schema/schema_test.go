@@ -1,7 +1,8 @@
-package schema
+package schema_test
 
 import (
 	"database/sql"
+	"github.com/hughcube-go/tablestore/schema"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -39,7 +40,7 @@ func TestSchemaParse(t *testing.T) {
 		ID: 12345,
 	}
 
-	tableSchema, err := Parse(model, nil)
+	tableSchema, err := schema.Parse(model, nil)
 	a.Nil(err)
-	a.IsType(tableSchema, &Schema{})
+	a.IsType(tableSchema, &schema.Schema{})
 }

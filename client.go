@@ -29,13 +29,3 @@ func (t *TableStore) ParseSchema(dest interface{}) (*schema.Schema, error) {
 func (t *TableStore) GetClient() *aliTableStore.TableStoreClient {
 	return t.client
 }
-
-
-//func (t *TableStore) Update(primaryKey interface{}, values map[string]interface{}) error {
-//}
-//
-//func (t *TableStore) QueryOne(primaryKey interface{}, dest interface{}) error {
-//}
-//
-//func (t *TableStore) QueryRange(startPrimaryKey interface{}, endPrimaryKey interface{}, dest interface{}) error {
-//}

@@ -23,6 +23,7 @@ type BModel struct {
 
 type TestModel struct {
 	BModel
+	Test     int64
 	Pk       int64         `tableStore:"primaryKey;column:pk;sort:1;"`
 	ID       int64         `tableStore:"primaryKey;column:id;autoIncrement;sort:2;"`
 	typeTest time.Duration `tableStore:"column:type_test;"`
@@ -49,8 +50,8 @@ func client_test_model() (*TestModel, sql.NullTime) {
 
 func client_test_client() *TableStore {
 	client := New(
-		"https://mscube.cn-shenzhen.ots.aliyuncs.com",
-		"mscube",
+		os.Getenv("ALIYUN_OTS_END_POINT"),
+		os.Getenv("ALIYUN_OTS_INSTANCE_NAME"),
 		os.Getenv("ALIYUN_ACCESS_KEY"),
 		os.Getenv("ALIYUN_ACCESS_KEY_SECRET"),
 	)
@@ -142,7 +143,6 @@ func Test_Client_QueryAll(t *testing.T) {
 	}
 
 	queryAllResponse := client.QueryAll(&rows)
-	println(queryAllResponse.Error)
 	a.Nil(queryAllResponse.Error)
 }
 
@@ -172,7 +172,7 @@ func Test_Client_QueryRange(t *testing.T) {
 	client := client_test_client()
 
 	row, _ := client_test_model()
-	_= client.Insert(row)
+	_ = client.Insert(row)
 
 	var response QueryRangeResponse
 
