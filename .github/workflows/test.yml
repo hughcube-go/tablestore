@@ -26,8 +26,6 @@ jobs:
           ALIYUN_OTS_INSTANCE_NAME:
           ALIYUN_ACCESS_KEY:
           ALIYUN_ACCESS_KEY_SECRET:
-
-      - name: Run Test
         run: |
           echo "Hello World"
 #          go test -v -race ./...
