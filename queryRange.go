@@ -91,6 +91,6 @@ func (t *TableStore) QueryRange(list interface{}, start interface{}, end interfa
 		Response:            response,
 		NextStartPrimaryKey: response.NextStartPrimaryKey,
 		HasNext:             nil != response.NextStartPrimaryKey,
-		RowCount:            len(response.Rows),
+		RowCount:            listValue.Elem().Len(),
 	}
 }
