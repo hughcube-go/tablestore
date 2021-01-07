@@ -27,6 +27,7 @@ jobs:
           ALIYUN_ACCESS_KEY:
           ALIYUN_ACCESS_KEY_SECRET:
 
-#      - name: Run Test
-#        run: |
+      - name: Run Test
+        run: |
+          echo "Hello World"
 #          go test -v -race ./...
