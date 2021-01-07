@@ -27,8 +27,14 @@ func (t *TableStore) QueryRange(list interface{}, start interface{}, end interfa
 		return QueryRangeResponse{Error: schema.CannotConvertTablerPointerSlice}
 	}
 
-	// 转换为Tabler类型, 为了获得表名
-	dest, ok := reflect.New(rowType).Interface().(schema.Tabler)
+	// 转换为Tabler类型, 为了获得表名, 如果存在使用二级索引的时候
+	var dest schema.Tabler
+	var ok bool
+	if 0 < listValue.Elem().Len() {
+		dest, ok = listValue.Elem().Index(0).Interface().(schema.Tabler)
+	} else {
+		dest, ok = reflect.New(rowType).Interface().(schema.Tabler)
+	}
 	if !ok {
 		return QueryRangeResponse{Error: schema.CannotConvertTablerPointerSlice}
 	}
