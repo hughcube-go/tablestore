@@ -21,10 +21,5 @@ jobs:
           go-version: ${{ matrix.go-versions }}
 
       - name: Run Test
-        with:
-          ALIYUN_OTS_END_POINT:
-          ALIYUN_OTS_INSTANCE_NAME:
-          ALIYUN_ACCESS_KEY:
-          ALIYUN_ACCESS_KEY_SECRET:
         run: |
           echo "Hello World"
