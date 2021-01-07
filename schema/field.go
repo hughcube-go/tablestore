@@ -125,6 +125,8 @@ func (f *Field) ToStructFieldValue(value interface{}) interface{} {
 		value, ok = value.(float32)
 	} else if valueKind == reflect.Float64 && fieldKind == reflect.Float64 {
 		value, ok = value.(float64)
+	}else{
+		ok = true
 	}
 
 	if !ok {
@@ -153,6 +155,8 @@ func (f *Field) ToOtsColumnValue(value interface{}) interface{} {
 		value, ok = value.(int64)
 	} else if f.IsFloat() {
 		value, ok = value.(float64)
+	}else{
+		ok = true
 	}
 
 	if !ok {
