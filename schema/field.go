@@ -47,125 +47,124 @@ func ParseField(fieldStruct reflect.StructField) *Field {
 	return field
 }
 
-func (f *Field) IsString() bool {
-	return f.StructField.Type.Kind() == reflect.String
-}
-
-func (f *Field) IsInt() bool {
-	typ := f.StructField.Type.Kind()
-
-	return typ == reflect.Int ||
-		typ == reflect.Int8 ||
-		typ == reflect.Int16 ||
-		typ == reflect.Int32 ||
-		typ == reflect.Int64 ||
-
-		//
-		typ == reflect.Uint ||
-		typ == reflect.Uint8 ||
-		typ == reflect.Uint16 ||
-		typ == reflect.Uint32 ||
-		typ == reflect.Uint64
-}
-
-func (f *Field) IsByte() bool {
-	return f.StructField.Type == reflect.TypeOf([]byte(""))
-}
-
-func (f *Field) IsFloat() bool {
-	typ := f.StructField.Type.Kind()
-	return typ == reflect.Float32 || typ == reflect.Float64
-}
-
-func (f *Field) IsBool() bool {
-	return f.StructField.Type.Kind() == reflect.Bool
-}
-
 func (f *Field) IsSqlTime() bool {
-	return f.StructField.Type == reflect.TypeOf(sql.NullTime{})
-}
+	fieldType := f.StructField.Type
 
-func (f *Field) ToStructFieldValue(value interface{}) interface{} {
-	valueKind := reflect.TypeOf(value).Kind()
-	fieldKind := f.StructField.Type.Kind()
-
-	// 表格存储, 支持的类型有   字符串, 整形, 二进制, 浮点数, 布尔值
-	// 其中可能需要做强制转换的有  整形, 浮点, sqlTime
-
-	var ok bool
-	var err error
-	if f.IsSqlTime() && valueKind == reflect.String {
-		value, err = timestamps.ParseRFC3339Nano(value.(string))
-		ok = err == nil
-		//
-		//
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Int {
-		value, ok = value.(int)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Int8 {
-		value, ok = value.(int8)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Int16 {
-		value, ok = value.(int16)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Int32 {
-		value, ok = value.(int32)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Int64 {
-		value, ok = value.(int64)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Uint {
-		value, ok = value.(uint)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Uint8 {
-		value, ok = value.(uint8)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Uint16 {
-		value, ok = value.(uint16)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Uint32 {
-		value, ok = value.(uint32)
-	} else if valueKind == reflect.Int64 && fieldKind == reflect.Uint64 {
-		value, ok = value.(uint64)
-		//
-		//
-	} else if valueKind == reflect.Float64 && fieldKind == reflect.Float32 {
-		value, ok = value.(float32)
-	} else if valueKind == reflect.Float64 && fieldKind == reflect.Float64 {
-		value, ok = value.(float64)
-	}else{
-		ok = true
+	for fieldType.Kind() == reflect.Ptr {
+		fieldType = fieldType.Elem()
 	}
 
-	if !ok {
-		panic(fmt.Sprintf(
-			"field.ToStructFieldValue A cast failure requires that the %s give an %s",
-			f.StructField.Type.Kind().String(),
-			reflect.TypeOf(value).Kind().String(),
-		))
-	}
-
-	return value
+	return fieldType == reflect.TypeOf(sql.NullTime{})
 }
 
-func (f *Field) ToOtsColumnValue(value interface{}) interface{} {
-	var ok bool
+func (f *Field) IsBytes() bool {
+	return f.StructField.Type == reflect.TypeOf([]byte{})
+}
 
-	// 表格存储, 支持的类型有   字符串, 整形, 二进制, 浮点数, 布尔值
-	// 其中可能需要做强制转换的有  整形, 浮点, sqlTime
+func (f *Field) GetPtrLevel() int {
+	ptrLevel := 0
+	tmpFieldType := f.StructField.Type
+	for tmpFieldType.Kind() == reflect.Ptr {
+		tmpFieldType = tmpFieldType.Elem()
+		ptrLevel++
+	}
 
-	if f.IsSqlTime() {
-		var sqlValue sql.NullTime
-		if sqlValue, ok = value.(sql.NullTime); ok {
-			value = timestamps.FormatRFC3339Nano(sqlValue)
+	return ptrLevel
+}
+
+func (f *Field) SetValue(fieldValue reflect.Value, value interface{}) {
+	// 提取基本value
+	baseValue := reflect.ValueOf(value)
+	for baseValue.Kind() == reflect.Ptr {
+		baseValue = baseValue.Elem()
+	}
+
+	// 时间格式的需要单独处理
+	if baseValue.Kind() == reflect.String && f.IsSqlTime() {
+		if sqlTimeDate, err := timestamps.ParseRFC3339Nano(baseValue.String()); err == nil {
+			baseValue = reflect.ValueOf(sqlTimeDate)
 		}
-	} else if f.IsInt() {
-		value, ok = value.(int64)
-	} else if f.IsFloat() {
-		value, ok = value.(float64)
-	}else{
-		ok = true
+	}
+
+	// 提取字段基本类型
+	fieldBaseType := f.StructField.Type
+	for fieldBaseType.Kind() == reflect.Ptr {
+		fieldBaseType = fieldBaseType.Elem()
+	}
+
+	// 数据类型转换
+	baseValue = baseValue.Convert(fieldBaseType)
+
+	// 如果只指针属性, 找出最基本的value设置值
+	trueValue := baseValue
+	if f.StructField.Type.Kind() == reflect.Ptr {
+
+		tmpValue := trueValue
+		for i := 1; i <= f.GetPtrLevel(); i++ {
+			pv := reflect.New(tmpValue.Type())
+			pv.Elem().Set(tmpValue)
+
+			tmpValue = pv
+		}
+
+		trueValue = tmpValue
+	}
+	fieldValue.Set(trueValue)
+}
+
+func (f *Field) ToOtsValue(val interface{}) interface{} {
+	// 表格存储, 支持的类型有   字符串, 整形, 二进制, 浮点数, 布尔值
+	// 其中可能需要做强制转换的有  整形, 浮点, sqlTime
+
+	value := reflect.ValueOf(val)
+	for value.Kind() == reflect.Ptr {
+		value = value.Elem()
+	}
+	valueKind := value.Kind()
+
+	valueType := reflect.TypeOf(val)
+	for valueType.Kind() == reflect.Ptr {
+		valueType = valueType.Elem()
+	}
+	typeKind := valueType.Kind()
+
+	if typeKind != valueKind {
+		value = reflect.New(valueType).Elem()
+		valueKind = value.Kind()
+	}
+
+	ok := true
+	var otsValue interface{}
+
+	if val, is := val.(sql.NullTime); is {
+		otsValue = timestamps.FormatRFC3339Nano(val)
+		///////////////////////////////////////
+		///////////////////////////////////////
+	} else if typeKind == reflect.String {
+		otsValue = value.String()
+	} else if valueKind == reflect.Slice && valueType.Elem().Kind() == reflect.Uint8 {
+		otsValue = value.Bytes()
+		///////////////////////////////////////
+		///////////////////////////////////////
+	} else if valueKind == reflect.Int || valueKind == reflect.Int8 || valueKind == reflect.Int16 || valueKind == reflect.Int32 || valueKind == reflect.Int64 {
+		otsValue = value.Int()
+	} else if valueKind == reflect.Uint || valueKind == reflect.Uint8 || valueKind == reflect.Uint16 || valueKind == reflect.Uint32 || valueKind == reflect.Uint64 {
+		otsValue = int64(value.Uint())
+	} else if valueKind == reflect.Float32 || valueKind == reflect.Float64 {
+		otsValue = value.Float()
+	} else if valueKind == reflect.Bool {
+		otsValue = value.Bool()
+	} else {
+		ok = false
 	}
 
 	if !ok {
 		panic(fmt.Sprintf(
-			"field.ToOtsColumnValue A cast failure requires that the %s give an %s",
-			f.StructField.Type.Kind().String(),
+			"field.ToOtsValue A cast failure requires that the %s give an %s",
 			reflect.TypeOf(value).Kind().String(),
+			f.StructField.Type.Kind().String(),
 		))
 	}
 
-	return value
+	return otsValue
 }

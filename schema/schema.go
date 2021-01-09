@@ -201,7 +201,7 @@ func (s *Schema) eachField(row interface{}, callback func(field *Field, value re
 
 func (s *Schema) EachSetRequestColumn(row Tabler, callback func(field *Field, value interface{})) {
 	setRequestColumnCallback := func(field *Field, columnValue reflect.Value) {
-		callback(field, field.ToOtsColumnValue(columnValue.Interface()))
+		callback(field, field.ToOtsValue(columnValue.Interface()))
 	}
 	s.eachField(row, setRequestColumnCallback, 0)
 }
@@ -266,9 +266,9 @@ func (s *Schema) BuildRequestRangePrimaryKey(condition interface{}) (*aliTableSt
 		}
 
 		if value, ok := conditionMap[field.DBName]; ok && nil != value {
-			primaryKeys.AddPrimaryKeyColumn(field.DBName, field.ToOtsColumnValue(value))
+			primaryKeys.AddPrimaryKeyColumn(field.DBName, field.ToOtsValue(value))
 		} else if value, ok := conditionMap[field.Name]; ok && nil != value {
-			primaryKeys.AddPrimaryKeyColumn(field.DBName, field.ToOtsColumnValue(value))
+			primaryKeys.AddPrimaryKeyColumn(field.DBName, field.ToOtsValue(value))
 		} else if isMin {
 			primaryKeys.AddPrimaryKeyColumnWithMinValue(field.DBName)
 		} else {
@@ -292,7 +292,7 @@ func (s *Schema) FillRow(row interface{}, primaryKeys []*aliTableStore.PrimaryKe
 
 	setRowFieldCallback := func(field *Field, fieldValue reflect.Value) {
 		if value, ok := columnMap[field.DBName]; ok && fieldValue.CanSet() {
-			fieldValue.Set(reflect.ValueOf(field.ToStructFieldValue(value)))
+			field.SetValue(fieldValue, value)
 		}
 	}
 

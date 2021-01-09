@@ -23,10 +23,21 @@ type BModel struct {
 
 type TestModel struct {
 	BModel
-	Test     int64
-	Pk       int64         `tableStore:"primaryKey;column:pk;sort:1;"`
-	ID       int64         `tableStore:"primaryKey;column:id;autoIncrement;sort:2;"`
-	typeTest time.Duration `tableStore:"column:type_test;"`
+	Test int64
+	Pk   int64 `tableStore:"primaryKey;column:pk;sort:1;"`
+	ID   int64 `tableStore:"primaryKey;column:id;autoIncrement;sort:2;"`
+
+	// 表格存储, 支持的类型有   字符串, 整形, 二进制, 浮点数, 布尔值
+	// 其中可能需要做强制转换的有  整形, 浮点, sqlTime
+	StringPtr0Column string         `tableStore:"column:string_ptr0_column;"`
+	StringPtr1Column *string        `tableStore:"column:string_ptr1_column;"`
+	StringPtr4Column ****string     `tableStore:"column:string_ptr4_column;"`
+	IntColumn        int            `tableStore:"column:int_column;"`
+	Float64Column    float64        `tableStore:"column:float64_column;"`
+	Float32Column    float32        `tableStore:"column:float32_column;"`
+	BoolColumn       bool           `tableStore:"column:bool_column;"`
+	TimePtr0Column   time.Duration  `tableStore:"column:time_ptr0_column;"`
+	TimePtr1Column   *time.Duration `tableStore:"column:time_ptr1_column;"`
 }
 
 func (m *TestModel) TableName() string {
@@ -35,10 +46,27 @@ func (m *TestModel) TableName() string {
 
 func client_test_model() (*TestModel, sql.NullTime) {
 	now := sql.NullTime{Time: time.Now(), Valid: true}
+
+	stringPt0Value := "1111"
+	stringPt1Value := &stringPt0Value
+	stringPt2Value := &stringPt1Value
+	stringPt3Value := &stringPt2Value
+	stringPt4Value := &stringPt3Value
+
+	var timePt0Value time.Duration
+	timePt0Value = 1
+	timePt1Value := &timePt0Value
+
 	m := &TestModel{
-		Pk:       now.Time.UnixNano(),
-		ID:       now.Time.UnixNano(),
-		typeTest: 10,
+		Pk: now.Time.UnixNano(),
+		ID: now.Time.UnixNano(),
+
+		StringPtr0Column: stringPt0Value,
+		StringPtr1Column: stringPt1Value,
+		StringPtr4Column: stringPt4Value,
+
+		TimePtr0Column: timePt0Value,
+		TimePtr1Column: timePt1Value,
 	}
 
 	m.SetCreatedAt(now.Time)
