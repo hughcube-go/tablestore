@@ -2,6 +2,7 @@ package tablestore
 
 import (
 	"database/sql"
+	"encoding/json"
 	"github.com/hughcube-go/tablestore/schema"
 	"github.com/hughcube-go/timestamps"
 	"github.com/stretchr/testify/assert"
@@ -53,8 +54,7 @@ func client_test_model() (*TestModel, sql.NullTime) {
 	stringPt3Value := &stringPt2Value
 	stringPt4Value := &stringPt3Value
 
-	var timePt0Value time.Duration
-	timePt0Value = 1
+	var timePt0Value time.Duration = 1
 	timePt1Value := &timePt0Value
 
 	m := &TestModel{
@@ -143,8 +143,10 @@ func Test_Client_QueryOne(t *testing.T) {
 	queryOneResponse = client.QueryOne(queryRow)
 	a.Nil(queryOneResponse.Error)
 	a.True(queryOneResponse.Exists)
-	a.Equal(queryRow.Pk, row.Pk)
-	a.Equal(queryRow.ID, row.ID)
+
+	queryRowJson, _ := json.Marshal(queryRow)
+	rowJson, _ := json.Marshal(row)
+	a.Equal(queryRowJson, rowJson)
 }
 
 func Test_Client_QueryAll(t *testing.T) {

@@ -18,22 +18,34 @@ type Field struct {
 	DBName      string
 	StructField reflect.StructField
 
+	PtrLevel int
+	Type     reflect.Type
+	BaseType reflect.Type
+
 	IsPrimaryKey    bool
 	IsAutoIncrement bool
 	IsStatement     bool
 
-	TypeHierarchy  int
-	ValueHierarchy int
+	TypeLevel  int
+	ValueLevel int
 }
 
-func ParseField(fieldStruct reflect.StructField) *Field {
+func ParseField(structField reflect.StructField) *Field {
 	field := &Field{
-		Name:        fieldStruct.Name,
-		StructField: fieldStruct,
+		Name:        structField.Name,
+		StructField: structField,
 		Sort:        math.MaxInt32,
+		Type:        structField.Type,
 	}
 
-	tag := msstruct.ParseTag(fieldStruct.Tag.Get("tableStore"))
+	// 基本类型
+	field.BaseType = field.Type
+	for field.BaseType.Kind() == reflect.Ptr {
+		field.PtrLevel++
+		field.BaseType = field.BaseType.Elem()
+	}
+
+	tag := msstruct.ParseTag(structField.Tag.Get("tableStore"))
 
 	field.DBName = tag.Get("column")
 	field.IsPrimaryKey = tag.IsTrue("primaryKey")
@@ -48,28 +60,7 @@ func ParseField(fieldStruct reflect.StructField) *Field {
 }
 
 func (f *Field) IsSqlTime() bool {
-	fieldType := f.StructField.Type
-
-	for fieldType.Kind() == reflect.Ptr {
-		fieldType = fieldType.Elem()
-	}
-
-	return fieldType == reflect.TypeOf(sql.NullTime{})
-}
-
-func (f *Field) IsBytes() bool {
-	return f.StructField.Type == reflect.TypeOf([]byte{})
-}
-
-func (f *Field) GetPtrLevel() int {
-	ptrLevel := 0
-	tmpFieldType := f.StructField.Type
-	for tmpFieldType.Kind() == reflect.Ptr {
-		tmpFieldType = tmpFieldType.Elem()
-		ptrLevel++
-	}
-
-	return ptrLevel
+	return f.BaseType == reflect.TypeOf(sql.NullTime{})
 }
 
 func (f *Field) SetValue(fieldValue reflect.Value, value interface{}) {
@@ -86,29 +77,18 @@ func (f *Field) SetValue(fieldValue reflect.Value, value interface{}) {
 		}
 	}
 
-	// 提取字段基本类型
-	fieldBaseType := f.StructField.Type
-	for fieldBaseType.Kind() == reflect.Ptr {
-		fieldBaseType = fieldBaseType.Elem()
-	}
-
 	// 数据类型转换
-	baseValue = baseValue.Convert(fieldBaseType)
+	trueValue := baseValue.Convert(f.BaseType)
 
-	// 如果只指针属性, 找出最基本的value设置值
-	trueValue := baseValue
-	if f.StructField.Type.Kind() == reflect.Ptr {
-
-		tmpValue := trueValue
-		for i := 1; i <= f.GetPtrLevel(); i++ {
-			pv := reflect.New(tmpValue.Type())
-			pv.Elem().Set(tmpValue)
-
-			tmpValue = pv
-		}
-
-		trueValue = tmpValue
+	// 如果是指针类型, 先初始化, 在用baseValue设置值
+	tmpValue := trueValue
+	for i := 1; i <= f.PtrLevel; i++ {
+		pv := reflect.New(tmpValue.Type())
+		pv.Elem().Set(tmpValue)
+		tmpValue = pv
 	}
+	trueValue = tmpValue
+
 	fieldValue.Set(trueValue)
 }
 
@@ -128,43 +108,44 @@ func (f *Field) ToOtsValue(val interface{}) interface{} {
 	}
 	typeKind := valueType.Kind()
 
+	// 可能存在ZeroValue的情况
 	if typeKind != valueKind {
 		value = reflect.New(valueType).Elem()
 		valueKind = value.Kind()
 	}
 
-	ok := true
-	var otsValue interface{}
-
-	if val, is := val.(sql.NullTime); is {
-		otsValue = timestamps.FormatRFC3339Nano(val)
-		///////////////////////////////////////
-		///////////////////////////////////////
-	} else if typeKind == reflect.String {
-		otsValue = value.String()
-	} else if valueKind == reflect.Slice && valueType.Elem().Kind() == reflect.Uint8 {
-		otsValue = value.Bytes()
-		///////////////////////////////////////
-		///////////////////////////////////////
-	} else if valueKind == reflect.Int || valueKind == reflect.Int8 || valueKind == reflect.Int16 || valueKind == reflect.Int32 || valueKind == reflect.Int64 {
-		otsValue = value.Int()
-	} else if valueKind == reflect.Uint || valueKind == reflect.Uint8 || valueKind == reflect.Uint16 || valueKind == reflect.Uint32 || valueKind == reflect.Uint64 {
-		otsValue = int64(value.Uint())
-	} else if valueKind == reflect.Float32 || valueKind == reflect.Float64 {
-		otsValue = value.Float()
-	} else if valueKind == reflect.Bool {
-		otsValue = value.Bool()
-	} else {
-		ok = false
+	if val, is := value.Interface().(sql.NullTime); is {
+		return timestamps.FormatRFC3339Nano(val)
 	}
 
-	if !ok {
-		panic(fmt.Sprintf(
-			"field.ToOtsValue A cast failure requires that the %s give an %s",
-			reflect.TypeOf(value).Kind().String(),
-			f.StructField.Type.Kind().String(),
-		))
+	if typeKind == reflect.String {
+		return value.String()
 	}
 
-	return otsValue
+	if valueKind == reflect.Slice && valueType.Elem().Kind() == reflect.Uint8 {
+		return value.Bytes()
+	}
+
+	if valueKind == reflect.Int || valueKind == reflect.Int8 || valueKind == reflect.Int16 || valueKind == reflect.Int32 || valueKind == reflect.Int64 {
+		return value.Int()
+	}
+
+	if valueKind == reflect.Uint || valueKind == reflect.Uint8 || valueKind == reflect.Uint16 || valueKind == reflect.Uint32 || valueKind == reflect.Uint64 {
+		return int64(value.Uint())
+	}
+
+	if valueKind == reflect.Float32 || valueKind == reflect.Float64 {
+		return value.Float()
+	}
+
+	if valueKind == reflect.Bool {
+		return value.Bool()
+	}
+
+	// 无可用被识别的类型, 直接抛出错误
+	panic(fmt.Sprintf(
+		"field.ToOtsValue A cast failure requires that the %s give an %s",
+		reflect.TypeOf(value).Kind().String(),
+		f.StructField.Type.Kind().String(),
+	))
 }

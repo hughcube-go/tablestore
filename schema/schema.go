@@ -25,18 +25,18 @@ func (p FieldSlice) Less(i, j int) bool { return p[i].Sort < p[j].Sort }
 func (p FieldSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // 用来做按照优先级排序的
-type FieldHierarchySlice FieldSlice
+type FieldLevelSlice FieldSlice
 
-func (p FieldHierarchySlice) Len() int           { return len(p) }
-func (p FieldHierarchySlice) Less(i, j int) bool { return p[i].ValueHierarchy < p[j].ValueHierarchy }
-func (p FieldHierarchySlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+func (p FieldLevelSlice) Len() int           { return len(p) }
+func (p FieldLevelSlice) Less(i, j int) bool { return p[i].ValueLevel < p[j].ValueLevel }
+func (p FieldLevelSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 type Schema struct {
 	Name           string
 	Type           reflect.Type
 	Fields         FieldSlice
-	FieldDbNameMap map[string]*Field
-	FieldNameMap   map[string]*Field
+	ColumnFieldMap map[string]*Field
+	FieldMap       map[string]*Field
 }
 
 func NewSchema(typ reflect.Type) *Schema {
@@ -44,8 +44,8 @@ func NewSchema(typ reflect.Type) *Schema {
 		Name:           typ.Name(),
 		Type:           typ,
 		Fields:         []*Field{},
-		FieldDbNameMap: map[string]*Field{},
-		FieldNameMap:   map[string]*Field{},
+		ColumnFieldMap: map[string]*Field{},
+		FieldMap:       map[string]*Field{},
 	}
 }
 
@@ -86,7 +86,7 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 	tableSchema := NewSchema(modelType)
 
 	// 按照字段名分组
-	fieldNameMap := map[string]FieldHierarchySlice{}
+	fieldNameMap := map[string]FieldLevelSlice{}
 	for _, field := range tableSchema.parse(modelType, 0) {
 		fieldNameMap[field.Name] = append(fieldNameMap[field.Name], field)
 	}
@@ -108,7 +108,7 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 				trueField = field
 			}
 
-			trueField.ValueHierarchy = field.ValueHierarchy
+			trueField.ValueLevel = field.ValueLevel
 			trueField.StructField = field.StructField
 
 			if !field.IsStatement {
@@ -117,13 +117,13 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 		}
 
 		if nil != trueField {
-			tableSchema.FieldNameMap[trueField.Name] = trueField
+			tableSchema.FieldMap[trueField.Name] = trueField
 		}
 	}
 
-	for _, field := range tableSchema.FieldNameMap {
+	for _, field := range tableSchema.FieldMap {
 		tableSchema.Fields = append(tableSchema.Fields, field)
-		tableSchema.FieldDbNameMap[field.DBName] = field
+		tableSchema.ColumnFieldMap[field.DBName] = field
 	}
 
 	sort.Sort(tableSchema.Fields)
@@ -135,7 +135,7 @@ func Parse(dest interface{}, cache *sync.Map) (*Schema, error) {
 	return tableSchema, nil
 }
 
-func (s *Schema) parse(modelType reflect.Type, hierarchy int) []*Field {
+func (s *Schema) parse(modelType reflect.Type, level int) []*Field {
 	fields := []*Field{}
 
 	for i := 0; i < modelType.NumField(); i++ {
@@ -145,13 +145,13 @@ func (s *Schema) parse(modelType reflect.Type, hierarchy int) []*Field {
 		}
 
 		if field := s.ParseField(fieldType); field != nil {
-			field.TypeHierarchy = hierarchy
-			field.ValueHierarchy = hierarchy
+			field.TypeLevel = level
+			field.ValueLevel = level
 			fields = append(fields, field)
 		}
 
 		if fieldType.Type.Kind() == reflect.Struct {
-			fields = append(fields, s.parse(fieldType.Type, hierarchy+1)...)
+			fields = append(fields, s.parse(fieldType.Type, level+1)...)
 		}
 	}
 
@@ -171,7 +171,7 @@ func (s *Schema) GetAutoIncrField() *Field {
 	return nil
 }
 
-func (s *Schema) eachField(row interface{}, callback func(field *Field, value reflect.Value), hierarchy int) {
+func (s *Schema) eachField(row interface{}, callback func(field *Field, value reflect.Value), level int) {
 	rowValue := reflect.ValueOf(row)
 	rowType := reflect.TypeOf(row)
 
@@ -188,13 +188,13 @@ func (s *Schema) eachField(row interface{}, callback func(field *Field, value re
 			continue
 		}
 
-		if field, ok := s.FieldNameMap[fieldType.Name]; ok && field.ValueHierarchy == hierarchy {
+		if field, ok := s.FieldMap[fieldType.Name]; ok && field.ValueLevel == level {
 			callback(field, fieldValue)
 			continue
 		}
 
 		if fieldType.Type.Kind() == reflect.Struct {
-			s.eachField(fieldValue.Addr().Interface(), callback, hierarchy+1)
+			s.eachField(fieldValue.Addr().Interface(), callback, level+1)
 		}
 	}
 }
