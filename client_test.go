@@ -12,18 +12,18 @@ import (
 )
 
 type AModel struct {
-	timestamps.Timestamps
+	*timestamps.Timestamps
 	CreatedAt sql.NullTime `tableStore:"column:created_at;statement;"`
 	UpdatedAt sql.NullTime `tableStore:"column:updated_at;statement;"`
 	DeletedAt sql.NullTime `tableStore:"column:deleted_at;statement;"`
 }
 
 type BModel struct {
-	AModel
+	*AModel
 }
 
 type TestModel struct {
-	BModel
+	*BModel
 	Test int64
 	Pk   int64 `tableStore:"primaryKey;column:pk;sort:1;"`
 	ID   int64 `tableStore:"primaryKey;column:id;autoIncrement;sort:2;"`
@@ -69,9 +69,9 @@ func client_test_model() (*TestModel, sql.NullTime) {
 		TimePtr1Column: timePt1Value,
 	}
 
-	m.SetCreatedAt(now.Time)
-	m.SetUpdatedAt(now.Time)
-	m.SetDeletedAt(now.Time)
+	//m.SetCreatedAt(now.Time)
+	//m.SetUpdatedAt(now.Time)
+	//m.SetDeletedAt(now.Time)
 
 	return m, now
 }
@@ -213,4 +213,27 @@ func Test_Client_QueryRange(t *testing.T) {
 	response = client.QueryRange(&rows, schema.MinPrimaryKey{}, schema.MaxPrimaryKey{}, 1)
 	a.Nil(response.Error)
 	a.True(len(rows) > 0)
+}
+
+func Test_Client_UpdateOne(t *testing.T) {
+	a := assert.New(t)
+
+	client := client_test_client()
+
+	row, _ := client_test_model()
+	row.ID = client.Insert(row).LastId
+
+	var response UpdateOneResponse
+	response = client.UpdateOne(row, map[string]interface{}{
+		"int_column":         schema.IncrementValue(10),
+		"float64_column":     float64(1),
+		"string_ptr1_column": "111111",
+		"BoolColumn":         true,
+	})
+
+	a.Nil(response.Error)
+	a.Equal(10, row.IntColumn)
+	a.Equal(float64(1), row.Float64Column)
+	a.Equal("111111", *row.StringPtr1Column)
+	a.Equal(true, row.BoolColumn)
 }

@@ -17,6 +17,8 @@ type RangePrimaryKey map[string]interface{}
 type MaxPrimaryKey map[string]interface{}
 type MinPrimaryKey map[string]interface{}
 
+type IncrementValue int64
+
 //
 type FieldSlice []*Field
 
@@ -279,8 +281,39 @@ func (s *Schema) BuildRequestRangePrimaryKey(condition interface{}) (*aliTableSt
 	return primaryKeys, isMin, nil
 }
 
-func (s *Schema) FillRow(row interface{}, primaryKeys []*aliTableStore.PrimaryKeyColumn, columns []*aliTableStore.AttributeColumn) {
+func (s *Schema) BuildRequestUpdateColumns(columns map[string]interface{}) (*aliTableStore.UpdateRowChange, map[string]interface{}) {
+	rowChange := new(aliTableStore.UpdateRowChange)
+	rowChange.SetReturnIncrementValue()
 
+	directlyColumns := map[string]interface{}{}
+	for _, field := range s.Fields {
+		if field.IsPrimaryKey {
+			continue
+		}
+
+		var columnValue interface{}
+		if value, ok := columns[field.DBName]; ok && nil != value {
+			columnValue = value
+		} else if value, ok := columns[field.Name]; ok && nil != value {
+			columnValue = value
+		} else {
+			continue
+		}
+
+		if value, ok := columnValue.(IncrementValue); ok {
+			rowChange.IncrementColumn(field.DBName, int64(value))
+			rowChange.AppendIncrementColumnToReturn(field.DBName)
+		} else {
+			otsValue := field.ToOtsValue(columnValue)
+			rowChange.PutColumn(field.DBName, otsValue)
+			directlyColumns[field.DBName] = otsValue
+		}
+	}
+
+	return rowChange, directlyColumns
+}
+
+func (s *Schema) FillRow(row interface{}, primaryKeys []*aliTableStore.PrimaryKeyColumn, columns []*aliTableStore.AttributeColumn) {
 	columnMap := map[string]interface{}{}
 	for _, primaryKey := range primaryKeys {
 		columnMap[primaryKey.ColumnName] = primaryKey.Value
@@ -290,11 +323,14 @@ func (s *Schema) FillRow(row interface{}, primaryKeys []*aliTableStore.PrimaryKe
 		columnMap[column.ColumnName] = column.Value
 	}
 
+	s.FillRowColumns(row, columnMap)
+}
+
+func (s *Schema) FillRowColumns(row interface{}, columns map[string]interface{}) {
 	setRowFieldCallback := func(field *Field, fieldValue reflect.Value) {
-		if value, ok := columnMap[field.DBName]; ok && fieldValue.CanSet() {
+		if value, ok := columns[field.DBName]; ok && fieldValue.CanSet() {
 			field.SetValue(fieldValue, value)
 		}
 	}
-
 	s.eachField(row, setRowFieldCallback, 0)
 }
