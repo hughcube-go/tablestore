@@ -11,16 +11,27 @@ type ClientOption func(*TableStore)
 type TableStore struct {
 	*aliTableStore.TableStoreClient
 	schemaCache *sync.Map
+	config      Config
 }
 
 func New(endPoint, instanceName, accessKeyId, accessKeySecret string, options ...ClientOption) *TableStore {
+	return NewWithConfig(Config{
+		EndPoint:        endPoint,
+		InstanceName:    instanceName,
+		AccessKeyId:     accessKeyId,
+		AccessKeySecret: accessKeySecret,
+		Options:         options,
+	})
+}
 
+func NewWithConfig(config Config) *TableStore {
 	client := &TableStore{
-		TableStoreClient: aliTableStore.NewClient(endPoint, instanceName, accessKeyId, accessKeySecret),
+		TableStoreClient: aliTableStore.NewClient(config.EndPoint, config.InstanceName, config.AccessKeyId, config.AccessKeySecret),
 		schemaCache:      new(sync.Map),
+		config:           config,
 	}
 
-	for _, option := range options {
+	for _, option := range config.Options {
 		option(client)
 	}
 
@@ -33,4 +44,8 @@ func (t *TableStore) ParseSchema(dest interface{}) (*schema.Schema, error) {
 
 func (t *TableStore) GetSdk() *aliTableStore.TableStoreClient {
 	return t.TableStoreClient
+}
+
+func (t *TableStore) GetConfig() Config {
+	return t.config
 }
