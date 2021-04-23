@@ -48,7 +48,7 @@ func (t *TableStore) QueryOne(row schema.Tabler, options ...func(*aliTableStore.
 		option(request)
 	}
 
-	response, err := t.GetClient().GetRow(request)
+	response, err := t.GetRow(request)
 	if err != nil {
 		return QueryOneResponse{Response: response, Error: err}
 	}

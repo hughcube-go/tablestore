@@ -74,7 +74,7 @@ func (t *TableStore) QueryRange(list interface{}, start interface{}, end interfa
 		option(request)
 	}
 
-	response, err := t.GetClient().GetRange(request)
+	response, err := t.GetRange(request)
 	if err != nil {
 		return QueryRangeResponse{Error: err}
 	}

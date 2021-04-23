@@ -67,7 +67,7 @@ func (t *TableStore) QueryAll(list interface{}, options ...func(*aliTableStore.B
 		option(request)
 	}
 
-	response, err := t.GetClient().BatchGetRow(request)
+	response, err := t.BatchGetRow(request)
 	if err != nil {
 		return QueryAllResponse{Response: response, Error: err}
 	}

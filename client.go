@@ -6,26 +6,31 @@ import (
 	"sync"
 )
 
+type ClientOption func(*TableStore)
+
 type TableStore struct {
-	client      *aliTableStore.TableStoreClient
+	*aliTableStore.TableStoreClient
 	schemaCache *sync.Map
 }
 
-func New(endPoint, instanceName, accessKeyId, accessKeySecret string, options ...aliTableStore.ClientOption) *TableStore {
-	client := aliTableStore.NewClient(endPoint, instanceName, accessKeyId, accessKeySecret, options...)
+func New(endPoint, instanceName, accessKeyId, accessKeySecret string, options ...ClientOption) *TableStore {
 
-	tableStore := &TableStore{
-		client:      client,
-		schemaCache: new(sync.Map),
+	client := &TableStore{
+		TableStoreClient: aliTableStore.NewClient(endPoint, instanceName, accessKeyId, accessKeySecret),
+		schemaCache:      new(sync.Map),
 	}
 
-	return tableStore
+	for _, option := range options {
+		option(client)
+	}
+
+	return client
 }
 
 func (t *TableStore) ParseSchema(dest interface{}) (*schema.Schema, error) {
 	return schema.Parse(dest, t.schemaCache)
 }
 
-func (t *TableStore) GetClient() *aliTableStore.TableStoreClient {
-	return t.client
+func (t *TableStore) GetSdk() *aliTableStore.TableStoreClient {
+	return t.TableStoreClient
 }

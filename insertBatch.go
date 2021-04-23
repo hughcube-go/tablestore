@@ -45,7 +45,7 @@ func (t *TableStore) BatchInsert(list interface{}, options ...func(*aliTableStor
 		option(request)
 	}
 
-	response, err := t.GetClient().BatchWriteRow(request)
+	response, err := t.BatchWriteRow(request)
 	if err != nil {
 		return BatchInstallResponse{Error: err, Response: response}
 	}

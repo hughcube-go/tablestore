@@ -28,7 +28,7 @@ func (t *TableStore) UpdateOne(row schema.Tabler, columns map[string]interface{}
 		option(request)
 	}
 
-	response, err := t.GetClient().UpdateRow(request)
+	response, err := t.UpdateRow(request)
 	if err != nil {
 		return UpdateOneResponse{Error: err, Response: response}
 	}

@@ -38,7 +38,7 @@ func (t *TableStore) Insert(row schema.Tabler, options ...func(*aliTableStore.Pu
 		return InstallResponse{Error: err}
 	}
 
-	response, err := t.GetClient().PutRow(request)
+	response, err := t.PutRow(request)
 	if err != nil {
 		return InstallResponse{Error: err, Response: response}
 	}

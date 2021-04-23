@@ -23,7 +23,7 @@ func (t *TableStore) DeleteOne(row schema.Tabler) DeleteResponse {
 	request.DeleteRowChange.SetCondition(aliTableStore.RowExistenceExpectation_IGNORE)
 	request.DeleteRowChange.PrimaryKey = tableSchema.BuildRequestPrimaryKey(row)
 
-	response, err := t.GetClient().DeleteRow(request)
+	response, err := t.DeleteRow(request)
 	if err != nil {
 		return DeleteResponse{Error: err, Response: response}
 	}
